@@ -1,5 +1,6 @@
 import math as m
 import random as r
+r.seed(0)
 
 def roadsim2d(opts):
     # function inputs are processed here for greater clarity
@@ -46,7 +47,7 @@ def roadsim2d(opts):
     
     # min speed of entering cars
     if opts.get("inminspeed")==None or opts.get("inminspeed")<0:
-        opts.update({"inminspeed":1})
+        opts.update({"inminspeed":imax//2+1})
     imin=opts["inminspeed"]
     
     # starting value of unique IDs (license plates), make sure to have this exceed max ID for the initial condition, 0 by default
@@ -64,7 +65,7 @@ def roadsim2d(opts):
         opts.update({"breaking":1})
     breaking=opts["breaking"]
     
-    # time it takes for a car to make it to the end of the road will be measured from this ID number onwards, waits for the system to get consistent by default
+    # time it takes for a car to make it to the end of the road will be measured from this ID number onwards, set to -1 to turn off, waits for the system to get consistent by default
     if opts.get("measurefrom")==None:
         opts.update({"measurefrom":(lanes*length)//maxspeed})
     measure=opts["measurefrom"]
@@ -79,58 +80,51 @@ def roadsim2d(opts):
         # generate new cars
         for lane in road:
             prob=r.uniform(0,1)
-            if prob+ivol>1:
+            if prob+ivol>1 and (len(lane)<1 or lane[-1][1]>0):
                 #cars travel along the road according to position, and are sorted by position RTL
                 lane.append([uid,0,m.ceil(imin+prob*(imax-imin)),False,0])
                 uid=uid+1
         # handle switching across all lanes, from the leftmost (topmost) lane
         for lane in range(len(road)):
-            if len(road[lane])==0:
-                continue
-            A=-1
+            #initialize B,C,F. B=A-1,D=C-1,F=E-1
+            B=-1
             C=0
-            E=-1
-            while(C<len(road[lane]) and road[lane][C][3]):
-                C=C+1
-            #initialize A, B=A-1
+            F=-1
             if lane>0 and len(road[lane-1])!=0:
-                A=0
-                while(A<len(road[lane-1]) and road[lane-1][A][1]>=road[lane][C][1]):
-                    A=A+1
-            #initialize E, F=E-1
+                B=0
             if lane<lanes-1 and len(road[lane+1])!=0:
-                E=0
-                while(E<len(road[lane+1]) and road[lane+1][E][1]>=road[lane][C][1]):
-                    E=E+1
+                F=0
             while(C<len(road[lane])):
                 #switching logic
+                while(C>-1 and C<len(road[lane]) and road[lane][C][3]):
+                    C=C+1
+                while(B<0 or (B>-1 and lane>0 and B<len(road[lane-1]) and road[lane-1][B][1]>=road[lane][C][1])):
+                    B=B+1
+                B=B-1
+                while(F<0 or (F>-1 and lane<lanes-1 and F<len(road[lane+1]) and road[lane+1][F][1]>=road[lane][C][1])):
+                    F=F+1
+                F=F-1
                 road[lane][C][3]=True
-                if lane!=0 and C>0 and road[lane][C][1]+road[lane][C][2]>=road[lane][C-1][1] and (sideswitch or road[lane][C-1][1]-road[lane][C][1]>1) and (A<1 or road[lane-1][A-1][1]-road[lane][C][1]>1):
-                    road[lane-1].insert(A,road[lane].pop(C))
-                elif lane!=lanes-1 and C>0 and (sideswitch or road[lane][C-1][1]-road[lane][C][1]>1) and (E<1 or road[lane+1][E-1][1]-road[lane][C][1]>1):
-                    road[lane-1].insert(A,road[lane].pop(C))
+                if lane>0 and C>0 and road[lane][C][1]+road[lane][C][2]>=road[lane][C-1][1] and (sideswitch or road[lane][C-1][1]-road[lane][C][1]>1) and (B<0 or road[lane-1][B][1]-road[lane][C][1]>1):
+                    road[lane-1].insert(B+1,road[lane].pop(C))
+                elif lane<lanes-1 and C>0 and (sideswitch or road[lane][C-1][1]-road[lane][C][1]>1) and (sideswitch or road[lane][C-1][1]-road[lane][C][1]>1) and (F<0 or road[lane+1][F][1]-road[lane][C][1]>1):
+                    road[lane+1].insert(F+1,road[lane].pop(C))
                 else:
                     C=C+1
-                while(C<len(road[lane]) and road[lane][C][3]):
-                    C=C+1
-                while(A>-1 and A<len(road[lane-1]) and road[lane-1][A][1]>=road[lane][C][1]):
-                    A=A+1
-                while(E>-1 and E<len(road[lane+1]) and road[lane+1][E][1]>=road[lane][C][1]):
-                    E=E+1
         # apply 1D model across all lanes
         for lane in range(len(road)):
             C=0
             while(C<len(road[lane])):
                 if(C!=0):
-                    speed=max(min(maxspeed,road[lane][C][2]+1,m.ceil((road[lane][C-1][1]-road[lane][C][1])/breaking))-m.floor(r.uniform(p,p+1)),0)
+                    speed=max(min(maxspeed,road[lane][C][2]+1,m.ceil((road[lane][C-1][1]-road[lane][C][1]-1)/breaking))-m.floor(r.uniform(p,p+1)),0)
                 else:
                     speed=max(min(maxspeed,road[lane][C][2]+1)-m.floor(r.uniform(p,p+1)),0)
                 if road[lane][C][1]+speed<=length:
                     roads[i][lane].append([road[lane][C][0],road[lane][C][1]+speed,speed,False,road[lane][C][4]+1])
-                else:
+                elif road[lane][C][0]>=measure and measure>=0:
                     measurements[0].append([road[lane][C][0],road[lane][C][4]])
                 C=C+1
         road=roads[i]
         i=i+1
     return {"simulation":roads,"timetaken":measurements[0]}
-roads=roadsim2d({})
+roads=roadsim2d({"duration":200})
