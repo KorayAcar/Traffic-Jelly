@@ -64,9 +64,15 @@ def roadsim2d(opts):
         opts.update({"breaking":1})
     breaking=opts["breaking"]
     
+    # time it takes for a car to make it to the end of the road will be measured from this ID number onwards, waits for the system to get consistent by default
+    if opts.get("measurefrom")==None:
+        opts.update({"measurefrom":(lanes*length)//maxspeed})
+    measure=opts["measurefrom"]
+    
     # initialize simulation
     roads=[[[] for i in range(lanes)] for i in range(duration)]
     roads.insert(0,road)
+    measurements=[[]]
     
     i=1
     while i<=duration:
@@ -75,7 +81,7 @@ def roadsim2d(opts):
             prob=r.uniform(0,1)
             if prob+ivol>1:
                 #cars travel along the road according to position, and are sorted by position RTL
-                lane.append([uid,0,m.ceil(imin+prob*(imax-imin)),False])
+                lane.append([uid,0,m.ceil(imin+prob*(imax-imin)),False,0])
                 uid=uid+1
         # handle switching across all lanes, from the leftmost (topmost) lane
         for lane in range(len(road)):
@@ -120,9 +126,11 @@ def roadsim2d(opts):
                 else:
                     speed=max(min(maxspeed,road[lane][C][2]+1)-m.floor(r.uniform(p,p+1)),0)
                 if road[lane][C][1]+speed<=length:
-                    roads[i][lane].append([road[lane][C][0],road[lane][C][1]+speed,speed,False])
+                    roads[i][lane].append([road[lane][C][0],road[lane][C][1]+speed,speed,False,road[lane][C][4]+1])
+                else:
+                    measurements[0].append([road[lane][C][0],road[lane][C][4]])
                 C=C+1
         road=roads[i]
         i=i+1
-    return roads
+    return {"simulation":roads,"timetaken":measurements[0]}
 roads=roadsim2d({})
